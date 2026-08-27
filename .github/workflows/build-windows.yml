@@ -4,10 +4,7 @@ on:
   workflow_dispatch:
 
 # ============================================================
-# Windows UTF-8
-#
-# 确保 Python 和打包后的 EXE 在 Windows Runner 中
-# 能正常输出中文。
+# Force Python / packaged executable to use UTF-8
 # ============================================================
 
 env:
@@ -20,7 +17,7 @@ jobs:
   build-windows:
 
     # ========================================================
-    # 使用 GitHub 官方 Windows Runner
+    # Build on a real Windows GitHub runner
     # ========================================================
 
     runs-on: windows-latest
@@ -29,7 +26,7 @@ jobs:
     steps:
 
       # ======================================================
-      # 1. Checkout
+      # 1. Checkout source
       # ======================================================
 
       - name: Checkout source
@@ -37,7 +34,7 @@ jobs:
 
 
       # ======================================================
-      # 2. 安装 Python 3.9
+      # 2. Setup Python 3.9
       # ======================================================
 
       - name: Setup Python 3.9
@@ -48,27 +45,44 @@ jobs:
 
 
       # ======================================================
-      # 3. 设置 Windows Console UTF-8
+      # 3. Show environment information
       # ======================================================
 
-      - name: Setup UTF-8 console
-        shell: powershell
+      - name: Check environment
+        shell: pwsh
 
         run: |
-          chcp 65001
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Build Environment"
+          Write-Host "========================================"
 
-          Write-Host "Windows Console 已切换为 UTF-8"
+          python --version
+
+          Write-Host ""
+          Write-Host "Python executable:"
+          python -c "import sys; print(sys.executable)"
+
+          Write-Host ""
+          Write-Host "Console encoding:"
+          python -c "import sys; print(sys.stdout.encoding)"
+
+          Write-Host "========================================"
 
 
       # ======================================================
-      # 4. 安装 Python 依赖
+      # 4. Install dependencies
       # ======================================================
 
       - name: Install dependencies
-        shell: powershell
+        shell: pwsh
 
         run: |
-          chcp 65001
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Installing dependencies"
+          Write-Host "========================================"
+          Write-Host ""
 
           python -m pip install --upgrade pip
 
@@ -76,71 +90,64 @@ jobs:
 
 
       # ======================================================
-      # 5. 检查 Python / 依赖
+      # 5. Verify dependencies
       # ======================================================
 
       - name: Check dependencies
-        shell: powershell
+        shell: pwsh
 
         run: |
-          chcp 65001
-
           Write-Host ""
           Write-Host "========================================"
-          Write-Host "Python Version"
+          Write-Host "Dependency Check"
           Write-Host "========================================"
 
+          Write-Host ""
+          Write-Host "Python:"
           python --version
 
-
           Write-Host ""
-          Write-Host "========================================"
-          Write-Host "pycountry"
-          Write-Host "========================================"
-
+          Write-Host "pycountry:"
           python -c "import pycountry; print(pycountry.__version__)"
 
-
           Write-Host ""
-          Write-Host "========================================"
-          Write-Host "Akamai EdgeGrid"
-          Write-Host "========================================"
-
+          Write-Host "Akamai EdgeGrid:"
           python -c "from akamai.edgegrid import EdgeGridAuth; print('EdgeGrid OK')"
 
+          Write-Host ""
+          Write-Host "PyInstaller:"
+          python -m PyInstaller --version
 
           Write-Host ""
           Write-Host "========================================"
-          Write-Host "PyInstaller"
-          Write-Host "========================================"
-
-          python -m PyInstaller --version
 
 
       # ======================================================
-      # 6. 检查 ICO
+      # 6. Check Windows ICO
       # ======================================================
 
       - name: Check Windows ICO
-        shell: powershell
+        shell: pwsh
 
         run: |
-          chcp 65001
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Checking Windows icon"
+          Write-Host "========================================"
 
           if (-Not (Test-Path ".\akamai-header-tool.ico")) {
-
               Write-Host ""
-              Write-Host "没有找到："
+              Write-Host "ERROR: akamai-header-tool.ico was not found."
               Write-Host ""
-              Write-Host "akamai-header-tool.ico"
-              Write-Host ""
-
               exit 1
           }
 
           Write-Host ""
-          Write-Host "ICO 文件存在"
+          Write-Host "Icon file found:"
+          Get-Item ".\akamai-header-tool.ico"
+
           Write-Host ""
+          Write-Host "========================================"
 
 
       # ======================================================
@@ -148,14 +155,12 @@ jobs:
       # ======================================================
 
       - name: Build Windows EXE
-        shell: powershell
+        shell: pwsh
 
         run: |
-          chcp 65001
-
           Write-Host ""
           Write-Host "========================================"
-          Write-Host "开始编译 Windows EXE"
+          Write-Host "Building Windows executable"
           Write-Host "========================================"
           Write-Host ""
 
@@ -168,59 +173,78 @@ jobs:
             --collect-all akamai `
             main.py
 
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "PyInstaller finished"
+          Write-Host "========================================"
+
 
       # ======================================================
-      # 8. 检查 EXE 是否生成
+      # 8. Check generated EXE
       # ======================================================
 
       - name: Check Windows EXE
-        shell: powershell
+        shell: pwsh
 
         run: |
-          chcp 65001
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Checking generated executable"
+          Write-Host "========================================"
 
           if (-Not (Test-Path ".\dist\akamai-header-tool.exe")) {
-
               Write-Host ""
-              Write-Host "Windows EXE 没有生成。"
+              Write-Host "ERROR: dist\akamai-header-tool.exe was not generated."
               Write-Host ""
-
               exit 1
           }
 
           Write-Host ""
-          Write-Host "========================================"
-          Write-Host "Windows EXE 生成成功"
-          Write-Host "========================================"
-
+          Write-Host "Windows executable generated successfully:"
           Get-Item ".\dist\akamai-header-tool.exe"
+
+          Write-Host ""
+          Write-Host "========================================"
 
 
       # ======================================================
-      # 9. 测试 EXE 中文帮助
+      # 9. Test executable
+      #
+      # main.py handles UTF-8 stdout/stderr.
+      # This verifies that the packaged EXE can output
+      # the Chinese command-line help correctly.
       # ======================================================
 
       - name: Test Windows EXE
-        shell: powershell
+        shell: pwsh
 
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
 
         run: |
-          chcp 65001
-
           Write-Host ""
           Write-Host "========================================"
-          Write-Host "测试 Windows EXE --help"
+          Write-Host "Testing executable with --help"
           Write-Host "========================================"
           Write-Host ""
 
           .\dist\akamai-header-tool.exe --help
 
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host ""
+              Write-Host "ERROR: Executable test failed."
+              exit $LASTEXITCODE
+          }
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "Executable test passed"
+          Write-Host "========================================"
+
 
       # ======================================================
-      # 10. 上传 Windows EXE
+      # 10. Upload EXE artifact
       # ======================================================
 
       - name: Upload Windows EXE
@@ -229,5 +253,5 @@ jobs:
         with:
           name: akamai-header-tool-windows
           path: dist/akamai-header-tool.exe
-
           if-no-files-found: error
+          retention-days: 30
