@@ -35,6 +35,72 @@ from generate_region_rule import create_region_rule
 
 
 # ============================================================
+# Windows / Linux / macOS 终端 UTF-8 输出支持
+# ============================================================
+
+def configure_console_encoding():
+    """
+    将标准输出 stdout 和错误输出 stderr 尽量设置为 UTF-8。
+
+    主要解决 Windows 环境下中文输出时出现：
+
+        UnicodeEncodeError:
+        'charmap' codec can't encode characters
+
+    GitHub Actions Windows Runner、
+    Windows PowerShell、CMD 等环境默认编码可能不是 UTF-8。
+
+    errors="replace" 可以保证极端情况下，
+    程序不会因为打印中文而直接崩溃。
+    """
+
+    # --------------------------------------------------------
+    # stdout
+    # --------------------------------------------------------
+
+    try:
+
+        if hasattr(
+            sys.stdout,
+            "reconfigure"
+        ):
+
+            sys.stdout.reconfigure(
+                encoding="utf-8",
+                errors="replace"
+            )
+
+    except Exception:
+        pass
+
+    # --------------------------------------------------------
+    # stderr
+    # --------------------------------------------------------
+
+    try:
+
+        if hasattr(
+            sys.stderr,
+            "reconfigure"
+        ):
+
+            sys.stderr.reconfigure(
+                encoding="utf-8",
+                errors="replace"
+            )
+
+    except Exception:
+        pass
+
+
+# ============================================================
+# 必须在 argparse 输出帮助之前执行
+# ============================================================
+
+configure_console_encoding()
+
+
+# ============================================================
 # 固定父规则名称
 # ============================================================
 
@@ -50,9 +116,10 @@ class ChineseArgumentParser(argparse.ArgumentParser):
     自定义 argparse。
 
     主要作用：
-    1. 将常见参数错误改为中文
-    2. 将 usage 改为“用法”
-    3. 将 options 改为“参数说明”
+
+    1. 常见参数错误改为中文
+    2. usage 改为“用法”
+    3. options 改为“参数说明”
     """
 
     def format_help(self):
@@ -106,7 +173,9 @@ class ChineseArgumentParser(argparse.ArgumentParser):
             "the following arguments are required:"
         )
 
-        if message.startswith(required_prefix):
+        if message.startswith(
+            required_prefix
+        ):
 
             missing_args = message[
                 len(required_prefix):
@@ -120,7 +189,7 @@ class ChineseArgumentParser(argparse.ArgumentParser):
             )
 
         # ====================================================
-        # 未识别的参数
+        # 未识别参数
         # ====================================================
 
         elif message.startswith(
@@ -141,7 +210,7 @@ class ChineseArgumentParser(argparse.ArgumentParser):
             )
 
         # ====================================================
-        # 参数 choice 错误
+        # choice 参数错误
         # ====================================================
 
         elif "invalid choice:" in message:
@@ -157,7 +226,7 @@ class ChineseArgumentParser(argparse.ArgumentParser):
             )
 
         # ====================================================
-        # 整数参数错误
+        # Integer 参数错误
         # ====================================================
 
         elif "invalid int value:" in message:
@@ -198,21 +267,26 @@ class ChineseArgumentParser(argparse.ArgumentParser):
         print(
             "========================================"
         )
+
         print(
             chinese_message
         )
+
         print("")
         print(
             "请检查启动参数。"
         )
+
         print("")
         print(
             "查看完整帮助："
         )
+
         print("")
         print(
             "  akamai-header-tool --help"
         )
+
         print(
             "========================================"
         )
@@ -233,7 +307,7 @@ def parse_args():
     """
     解析命令行参数。
 
-    所有参数都增加中文帮助信息。
+    所有参数都增加中文说明。
     """
 
     parser = ChineseArgumentParser(
@@ -557,16 +631,6 @@ def cloudfront_encode(
     将非 ASCII 字符按照 UTF-8 做 Percent-Encoding。
 
     ASCII 字符保持原样。
-
-    示例：
-
-    New York
-    ->
-    New York
-
-    Québec
-    ->
-    Qu%C3%A9bec
     """
 
     if text is None:
@@ -580,7 +644,6 @@ def cloudfront_encode(
 
     for char in text:
 
-        # ASCII 字符保持原样
         if ord(char) < 128:
 
             result.append(
@@ -589,7 +652,6 @@ def cloudfront_encode(
 
             continue
 
-        # 非 ASCII 字符转 UTF-8 Percent-Encoding
         utf8_bytes = char.encode(
             "utf-8"
         )
@@ -620,8 +682,6 @@ def find_target_rule(
     SET Header(Country-Name&Country-Region-Name)
 
     查找时名称不区分大小写。
-
-    不支持通过参数修改父规则名称。
     """
 
     rule_name = str(
@@ -684,14 +744,6 @@ def load_region_mapping(
     读取外部 region_mapping.json。
 
     国家配置范围完全由该文件决定。
-
-    不再使用：
-        EXCLUDE_COUNTRIES
-
-    不遍历全部：
-        pycountry.countries
-
-    pycountry 只负责根据国家代码获取国家名称。
     """
 
     region_mapping_file = Path(
@@ -732,10 +784,6 @@ def load_region_mapping(
 
     total_regions = 0
 
-    # ========================================================
-    # 校验每个国家
-    # ========================================================
-
     for country_code, regions in mapping.items():
 
         normalized_country_code = str(
@@ -762,10 +810,6 @@ def load_region_mapping(
         normalized_regions: List[
             Dict[str, str]
         ] = []
-
-        # ====================================================
-        # 校验 Region
-        # ====================================================
 
         for region in regions:
 
@@ -829,10 +873,6 @@ def load_region_mapping(
             normalized_country_code
         ] = normalized_regions
 
-    # ========================================================
-    # 输出统计
-    # ========================================================
-
     print("")
     print(
         "========================================"
@@ -892,16 +932,6 @@ def build_country_rules(
 ) -> List[Dict[str, Any]]:
     """
     只根据 region_mapping.json 中存在的国家创建规则。
-
-    JSON 中存在：
-        US
-        FR
-
-    则只创建：
-        Country-Name-US
-        Country-Name-FR
-
-    以及对应 Region 子规则。
     """
 
     country_rules: List[
@@ -909,14 +939,10 @@ def build_country_rules(
     ] = []
 
     generated_region_count = 0
-    encoded_country_count = 0
-    encoded_region_count = 0
 
-    # ========================================================
-    # 关键逻辑
-    #
-    # 国家完全来自 region_mapping.json
-    # ========================================================
+    encoded_country_count = 0
+
+    encoded_region_count = 0
 
     country_codes = sorted(
         region_mapping.keys()
@@ -943,19 +969,11 @@ def build_country_rules(
 
     print("")
 
-    # ========================================================
-    # 遍历 JSON 中的国家
-    # ========================================================
-
     for country_code in country_codes:
 
         country_code = str(
             country_code
         ).strip().upper()
-
-        # ====================================================
-        # pycountry 只用于获取国家名称
-        # ====================================================
 
         country = pycountry.countries.get(
             alpha_2=country_code
@@ -969,10 +987,6 @@ def build_country_rules(
                     country_code
                 )
             )
-
-        # ====================================================
-        # 国家名称
-        # ====================================================
 
         original_country_name = str(
             country.name
@@ -989,10 +1003,6 @@ def build_country_rules(
         ):
 
             encoded_country_count += 1
-
-        # ====================================================
-        # 创建 Country Rule
-        # ====================================================
 
         country_rule = create_country_rule(
             country_code=country_code,
@@ -1020,10 +1030,6 @@ def build_country_rules(
                 )
             )
 
-        # ====================================================
-        # 当前国家 Region
-        # ====================================================
-
         regions = region_mapping.get(
             country_code,
             []
@@ -1039,10 +1045,6 @@ def build_country_rules(
             )
         )
 
-        # ====================================================
-        # 创建 Region 子规则
-        # ====================================================
-
         for region in regions:
 
             region_code = str(
@@ -1057,7 +1059,6 @@ def build_country_rules(
                 ]
             ).strip()
 
-            # 保持之前逻辑
             region_name = cloudfront_encode(
                 original_region_name
             )
@@ -1088,10 +1089,6 @@ def build_country_rules(
         country_rules.append(
             country_rule
         )
-
-    # ========================================================
-    # 生成统计
-    # ========================================================
 
     print("")
     print(
@@ -1155,8 +1152,6 @@ def replace_country_rules(
         Country-Name-*
 
     然后添加新生成的 Country Rules。
-
-    其他非 Country Rule 保留。
     """
 
     rules_root = rule_tree.get(
@@ -1203,10 +1198,6 @@ def replace_country_rules(
         Dict[str, Any]
     ] = []
 
-    # ========================================================
-    # 删除旧 Country-Name-*
-    # ========================================================
-
     for child in existing_children:
 
         if not isinstance(
@@ -1242,10 +1233,6 @@ def replace_country_rules(
             preserved_children
         )
     )
-
-    # ========================================================
-    # 写入新规则
-    # ========================================================
 
     target_rule[
         "children"
@@ -1375,7 +1362,7 @@ def main() -> None:
         )
 
         # ====================================================
-        # 3. Header Target
+        # Header Target
         # ====================================================
 
         behavior_name = get_behavior_name(
